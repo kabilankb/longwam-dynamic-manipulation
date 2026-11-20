@@ -41,5 +41,5 @@ OmegaConf.save(c, "checkpoints/yam/config_infer.yaml")
 EOF
 
 mkdir -p $ROOT/yam_bridge $ROOT/logs
-cp "$PKG"/eval/thor/{longwam_yam_server.py,wire.py,mock_server.py,serve_yam.sh} $ROOT/yam_bridge/
+cp "$PKG"/eval/thor/{longwam_yam_server.py,wire.py,mock_server.py,serve_yam.sh,merge_action_delta.py} $ROOT/yam_bridge/
 echo "Thor setup done. Start the server: bash $ROOT/yam_bridge/serve_yam.sh --tmux"

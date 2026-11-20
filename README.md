@@ -136,7 +136,10 @@ tmux new -s train 'bash ~/yam-conveyor-longwam/training/train.sh action'   # or:
 | `action` | action expert + proprio | lr 1e-4, 4 epochs, global batch 128 (2 GPUs × 8 × accum 8), save every 500 |
 | `full` | video + action experts | lr 3e-5, same schedule, Accelerate ZeRO-1 |
 
-Outputs go to `~/longwam/outputs/yam_conveyor/<timestamp>/`. Upload the weights you want to keep
+Outputs go to `~/longwam/outputs/yam_conveyor/<timestamp>/`. With `train_modules: action` only the action
+expert changes, so cut each 12 GB `checkpoints/weights/step_XXXXXX.pt` down to a ~2 GB action delta before moving it:
+`python training/extract_action_delta.py step_000250.pt action_step_000250.pt --base <base>/model.pt`
+(`--base` also verifies that the video expert is unchanged). Upload the weights you want to keep
 (e.g. `hf upload`) and **delete the instance** when done (`brev delete longwam-yam-ft`): it bills until deleted.
 
 ## 4. Policy server on the Jetson Thor
@@ -145,7 +148,10 @@ Outputs go to `~/longwam/outputs/yam_conveyor/<timestamp>/`. Upload the weights 
 rsync -a ./ USER@THOR_HOST:~/yam-conveyor-longwam/
 ssh USER@THOR_HOST 'bash ~/yam-conveyor-longwam/eval/thor/setup_thor.sh'      # once (~30 GB downloads)
 ssh USER@THOR_HOST 'bash ~/longwam/yam_bridge/serve_yam.sh --tmux'           # pretrained YAM checkpoint
-# fine-tuned: a directory with model.pt (fine-tuned weights) + the checkpoint's config.yaml and dataset_stats.json
+# fine-tuned: merge an action delta into the base bundle, then serve that directory
+ssh USER@THOR_HOST 'cd ~/longwam/LongLive/Long-WAM && ~/longwam/.venv/bin/python ~/longwam/yam_bridge/merge_action_delta.py \
+    checkpoints/yam action_step_000250.pt ~/longwam/checkpoints/yam_conveyor_ft'
+# (a merged directory holds model.pt + the checkpoint's config.yaml and dataset_stats.json)
 ssh USER@THOR_HOST 'CKPT_DIR=~/longwam/checkpoints/yam_conveyor_ft bash ~/longwam/yam_bridge/serve_yam.sh --tmux'
 ```
 `setup_thor.sh` has to work around three things:
