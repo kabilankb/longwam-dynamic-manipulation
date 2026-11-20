@@ -1,14 +1,14 @@
-# YAM Conveyor × Long-WAM
+# Long-WAM for Dynamic Manipulation
 
-**Project page:** https://kabilankb.github.io/yam-conveyor-longwam/ ·
-**PDF:** [docs/yam-conveyor-longwam.pdf](docs/yam-conveyor-longwam.pdf) ·
+Teaching a YAM bimanual robot to pick a cube off a moving conveyor with Long-WAM (NVlabs world-action model):
+YAMLab simulation and data generation, cloud fine-tuning on Brev, and policy serving on a Jetson AGX Thor.
+
+**Project page:** https://kabilankb.github.io/longwam-dynamic-manipulation/ ·
+**PDF:** [docs/longwam-dynamic-manipulation.pdf](docs/longwam-dynamic-manipulation.pdf) ·
 **Data:** [yam_conveyor_cube_rand](https://huggingface.co/datasets/kabilanKB/yam_conveyor_cube_rand),
 [Long-WAM copy](https://huggingface.co/datasets/kabilanKB/yam_conveyor_cube_rand_longwam)
 
 ![Conveyor scene](docs/img/scene.jpg)
-
-End-to-end workflow for teaching a **YAM bimanual robot** to pick a cube off a **moving conveyor**
-with **Long-WAM** (NVlabs world-action model):
 
 ```
  sim/        YAMLab (Isaac Sim 6 / Isaac Lab 3): conveyor task + scripted expert  ──► LeRobot dataset
@@ -115,12 +115,12 @@ proprio adapter. The 5 B video expert is frozen; its cache is detached from the 
 ```bash
 brev login                                                    # your API key / org
 brev create longwam-yam-ft --type massedcompute_RTXPro6000x2   # 2x RTX PRO 6000 96 GB, ~$5/h, not stoppable
-rsync -a ./ longwam-yam-ft:~/yam-conveyor-longwam/            # this package
+rsync -a ./ longwam-yam-ft:~/longwam-dynamic-manipulation/            # this package
 rsync -aL data/yam_conveyor/ longwam-yam-ft:~/longwam/data/yam_conveyor/   # optional, else pulled from HF
 ssh longwam-yam-ft
-tmux new -s setup 'bash ~/yam-conveyor-longwam/training/brev_setup.sh 2>&1 | tee ~/setup.log'
-tmux new -s train 'bash ~/yam-conveyor-longwam/training/train.sh smoke 2>&1 | tee ~/smoke.log'   # 30 steps
-tmux new -s train 'bash ~/yam-conveyor-longwam/training/train.sh action'   # or: full (ZeRO-1, 2 GPUs)
+tmux new -s setup 'bash ~/longwam-dynamic-manipulation/training/brev_setup.sh 2>&1 | tee ~/setup.log'
+tmux new -s train 'bash ~/longwam-dynamic-manipulation/training/train.sh smoke 2>&1 | tee ~/smoke.log'   # 30 steps
+tmux new -s train 'bash ~/longwam-dynamic-manipulation/training/train.sh action'   # or: full (ZeRO-1, 2 GPUs)
 ```
 
 `brev_setup.sh` does the following, and is safe to re-run:
@@ -149,8 +149,8 @@ expert changes, so cut each 12 GB `checkpoints/weights/step_XXXXXX.pt` down to a
 ## 4. Policy server on the Jetson Thor
 
 ```bash
-rsync -a ./ USER@THOR_HOST:~/yam-conveyor-longwam/
-ssh USER@THOR_HOST 'bash ~/yam-conveyor-longwam/eval/thor/setup_thor.sh'      # once (~30 GB downloads)
+rsync -a ./ USER@THOR_HOST:~/longwam-dynamic-manipulation/
+ssh USER@THOR_HOST 'bash ~/longwam-dynamic-manipulation/eval/thor/setup_thor.sh'      # once (~30 GB downloads)
 ssh USER@THOR_HOST 'bash ~/longwam/yam_bridge/serve_yam.sh --tmux'           # pretrained YAM checkpoint
 # fine-tuned: merge an action delta into the base bundle, then serve that directory
 ssh USER@THOR_HOST 'cd ~/longwam/LongLive/Long-WAM && ~/longwam/.venv/bin/python ~/longwam/yam_bridge/merge_action_delta.py \
