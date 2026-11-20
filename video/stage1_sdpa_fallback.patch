@@ -1,0 +1,89 @@
+diff --git a/Long-WAM/stage1/third_party/LongLive/wan_5b/modules/attention.py b/Long-WAM/stage1/third_party/LongLive/wan_5b/modules/attention.py
+index d15c7d4..d6d846d 100644
+--- a/Long-WAM/stage1/third_party/LongLive/wan_5b/modules/attention.py
++++ b/Long-WAM/stage1/third_party/LongLive/wan_5b/modules/attention.py
+@@ -92,6 +92,35 @@ __all__ = [
+ ]
+ 
+ 
++def _sdpa_fallback(q, k, v, q_lens, k_lens, softmax_scale, q_scale, causal, window_size, dtype):
++    """flash_attention semantics on torch SDPA: [B, L, N, C] layout, per-sample q/k lengths, GQA."""
++    if tuple(window_size) != (-1, -1):
++        raise NotImplementedError("sliding-window attention needs FlashAttention")
++    out_dtype = q.dtype
++    cast = dtype if q.dtype not in (torch.float16, torch.bfloat16) else q.dtype
++    if q_scale is not None:
++        q = q * q_scale
++    b, lq, nq, _ = q.shape
++    lk, nk = k.shape[1], k.shape[2]
++    qt, kt, vt = (x.transpose(1, 2).to(cast) for x in (q, k, v))
++    if nk != nq:  # grouped-query attention
++        kt = kt.repeat_interleave(nq // nk, dim=1)
++        vt = vt.repeat_interleave(nq // nk, dim=1)
++    mask = None
++    if k_lens is not None or q_lens is not None or causal:
++        mask = torch.ones(b, 1, lq, lk, dtype=torch.bool, device=q.device)
++        if k_lens is not None:
++            mask &= (torch.arange(lk, device=q.device)[None, :] < k_lens.to(q.device)[:, None])[:, None, None, :]
++        if causal:
++            mask &= torch.ones(lq, lk, dtype=torch.bool, device=q.device).tril(lk - lq)[None, None]
++    out = torch.nn.functional.scaled_dot_product_attention(qt, kt, vt, attn_mask=mask, scale=softmax_scale)
++    out = out.transpose(1, 2).contiguous()
++    if q_lens is not None:  # zero padded query rows, as varlen flash attention leaves them unused
++        qmask = (torch.arange(lq, device=q.device)[None, :] < q_lens.to(q.device)[:, None])[:, :, None, None]
++        out = out * qmask
++    return out.to(out_dtype)
++
++
+ def flash_attention(
+     q,
+     k,
+@@ -122,6 +151,9 @@ def flash_attention(
+     """
+     half_dtypes = (torch.float16, torch.bfloat16)
+     assert dtype in half_dtypes
++    if not (FLASH_ATTN_2_AVAILABLE or FLASH_ATTN_3_AVAILABLE or FLASH_ATTN_4_AVAILABLE):
++        # Local change: no FlashAttention build (e.g. Jetson Thor) -> masked PyTorch SDPA.
++        return _sdpa_fallback(q, k, v, q_lens, k_lens, softmax_scale, q_scale, causal, window_size, dtype)
+     assert q.device.type == 'cuda' and q.size(-1) <= 256
+ 
+     # params
+diff --git a/Long-WAM/stage1/third_party/LongLive/wan_5b/modules/causal_model.py b/Long-WAM/stage1/third_party/LongLive/wan_5b/modules/causal_model.py
+index 3f9d1d5..6fafc70 100644
+--- a/Long-WAM/stage1/third_party/LongLive/wan_5b/modules/causal_model.py
++++ b/Long-WAM/stage1/third_party/LongLive/wan_5b/modules/causal_model.py
+@@ -37,6 +37,25 @@ import torch
+ import math
+ import torch.distributed as dist
+ 
++
++def _cross_attention(q, k, v, k_lens):
++    """Text cross-attention: FlashAttention when installed, else masked PyTorch SDPA.
++
++    Local change so Stage-1 inference runs without a FlashAttention build (e.g. on Jetson Thor).
++    q/k/v are [B, L, H, D]; k_lens masks the padded text tokens.
++    """
++    from wan_5b.modules import attention as _attn
++    if _attn.FLASH_ATTN_2_AVAILABLE or _attn.FLASH_ATTN_3_AVAILABLE:
++        return _attn.flash_attention(q, k, v, k_lens=k_lens)
++    mask = None
++    if k_lens is not None:
++        lk = k.shape[1]
++        mask = (torch.arange(lk, device=k.device)[None, :] < k_lens.to(k.device)[:, None])[:, None, None, :]
++    dtype = torch.bfloat16 if q.dtype == torch.float32 else q.dtype
++    out = torch.nn.functional.scaled_dot_product_attention(
++        q.transpose(1, 2).to(dtype), k.transpose(1, 2).to(dtype), v.transpose(1, 2).to(dtype), attn_mask=mask)
++    return out.transpose(1, 2).contiguous().to(q.dtype)
++
+ # wan 5b model compilation for flexattention
+ flex_attention = torch.compile(
+     flex_attention, dynamic=False, mode="max-autotune-no-cudagraphs")
+@@ -248,7 +267,7 @@ class MultiShotT2VCrossAttention(WanCrossAttention):
+             v = self.v(context).view(b_eff, -1, n, d)
+ 
+             # compute attention
+-            x_attn = flash_attention(q, k, v, k_lens=context_lens)
++            x_attn = _cross_attention(q, k, v, context_lens)
+ 
+             # output projection
+             x_attn = x_attn.flatten(2)

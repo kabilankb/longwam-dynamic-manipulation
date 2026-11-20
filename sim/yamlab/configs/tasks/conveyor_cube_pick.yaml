@@ -1,0 +1,48 @@
+# =====================================================================
+# ConveyorCubePick task config: YAM bimanual station with a conveyor belt.
+#
+# A 4 cm cube rides a conveyor that runs along the table's Y axis (left -> right, in front of
+# both arms). The right arm picks it off the moving belt and drops it into a bin on its right.
+# The left arm stays home. Belt, rails, end stop and bin are primitives, so this task needs no
+# --asset instance folders. Geometry (belt pose/speed, bin pose) is in
+# envs/tasks/conveyor_cube_pick_manager_cfg.py.
+#
+# Keys here OVERRIDE configs/defaults.yaml on conflict.
+# =====================================================================
+
+env_names:
+  - ConveyorCubePick-v0
+
+objects:
+  cube:                                    # picked object: 4 cm cube, spawned at the belt's upstream end
+    mass: 0.05
+    randomization:
+      position_range: [0.015, 0.04]        # +/- x (across the belt), +/- y (along the belt)
+      orientation_range_deg: 45
+      scale_range: [1.0, 1.0]
+
+  bin:                                     # five kinematic boxes moved together at reset
+    randomization:
+      position_range: [0.05, 0.06]         # +/- x, +/- y (metres)
+      orientation_range_deg: 0
+      scale_range: [1.0, 1.0]
+
+# Lighting/material DR (only with --enable_domain_randomization / --hdris_path): re-randomize at each reset
+# only, so the lighting stays constant within an episode.
+domain_randomization:
+  randomize_interval_steps: 0
+
+grasp_detect:
+  left_arm: [cube]
+  right_arm: [cube]
+
+kwargs:
+  pick_by_two_hands: false
+
+# Stage 1: the cube is lifted pick_lift_threshold_m above the belt top while held.
+# Stage 2: the cube rests inside the bin (inner footprint, low height) and no gripper holds it.
+success:
+  pick_lift_threshold_m: 0.04
+  pick_required_consecutive_steps: 6
+  place_required_consecutive_steps_teleop: 8
+  place_required_consecutive_steps_eval: 15

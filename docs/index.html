@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Simulation, cloud fine-tuning and Jetson Thor evaluation of Long-WAM on a YAM conveyor pick-and-place task.">
+<title>YAM Conveyor Pipeline</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+html{-webkit-text-size-adjust:100%} *{box-sizing:border-box} img{max-width:100%}
+/* Layout: one narrow reading column; the pipeline is a three-lane SVG (laptop | Brev | Thor) that scrolls sideways on phones, followed by per-stage evidence. */
+:root {
+  --bg: #f5f7fa; --surface: #ffffff; --ink: #18202b; --muted: #5a6677; --rule: #d9dfe7;
+  --sim: #0f8a7e; --sim-soft: #e3f3f1;        /* laptop: YAMLab simulation */
+  --cloud: #3d5bd9; --cloud-soft: #e6ebfb;    /* Brev: training */
+  --edge: #c26a12; --edge-soft: #fbeedd;      /* Thor: policy + video */
+  --ok: #1d8a4a; --warn: #b7791f;
+  --display: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+  --body: "Inter", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f141b; --surface: #171e27; --ink: #e6ebf2; --muted: #9aa6b6; --rule: #2a3442;
+  --sim: #3cc4b5; --sim-soft: #12302d; --cloud: #8299ff; --cloud-soft: #1b2447;
+  --edge: #f0a04b; --edge-soft: #3a2812; --ok: #4cc47e; --warn: #e0a84a; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #0f141b; --surface: #171e27; --ink: #e6ebf2; --muted: #9aa6b6; --rule: #2a3442;
+  --sim: #3cc4b5; --sim-soft: #12302d; --cloud: #8299ff; --cloud-soft: #1b2447;
+  --edge: #f0a04b; --edge-soft: #3a2812; --ok: #4cc47e; --warn: #e0a84a; color-scheme: dark; }
+
+body { background: var(--bg); color: var(--ink); font: 15px/1.6 var(--body); }
+.wrap { max-width: 1080px; margin: 0 auto; padding-block: 40px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 44px; }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(28px, 4.2vw, 42px); line-height: 1.1; letter-spacing: -0.01em; }
+h2 { font-size: 22px; }
+h3 { font-size: 16px; }
+p { margin: 0; max-width: 68ch; }
+.lede { color: var(--muted); font-size: 16px; }
+.eyebrow { font: 500 12px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+header { display: grid; gap: 12px; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 8px; }
+.sw { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+
+.diagram { overflow-x: auto; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; }
+.diagram svg { display: block; min-width: 900px; width: 100%; height: auto; }
+svg text { font-family: var(--body); }
+.lane-title { font: 600 15px var(--display); }
+.lane-sub { font: 400 11.5px var(--mono); fill: var(--muted); }
+.box-t { font: 600 13px var(--body); fill: var(--ink); }
+.box-s { font: 400 11px var(--mono); fill: var(--muted); }
+.flow-l { font: 500 10.5px var(--mono); fill: var(--muted); }
+
+section { display: grid; gap: 18px; }
+.stage { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr); gap: 24px; align-items: start;
+  padding-top: 22px; border-top: 1px solid var(--rule); }
+.stage > div { min-width: 0; display: grid; gap: 10px; }
+.tag { justify-self: start; font: 500 11px/1 var(--mono); padding: 5px 8px; border-radius: 999px; letter-spacing: .04em; }
+.tag.sim { color: var(--sim); background: var(--sim-soft); }
+.tag.cloud { color: var(--cloud); background: var(--cloud-soft); }
+.tag.edge { color: var(--edge); background: var(--edge-soft); }
+figure { margin: 0; display: grid; gap: 6px; min-width: 0; }
+figure img { width: 100%; border-radius: 6px; border: 1px solid var(--rule); background: #000; }
+figcaption { font-size: 12.5px; color: var(--muted); }
+dl { margin: 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 14px; font-size: 13.5px; }
+dt { color: var(--muted); }
+dd { margin: 0; font-family: var(--mono); font-size: 12.5px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+
+.status { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.stat { background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; padding: 14px 16px; display: grid; gap: 4px; }
+.stat b { font: 600 22px var(--display); font-variant-numeric: tabular-nums; }
+.stat small { color: var(--muted); font-size: 12.5px; }
+.pill { justify-self: start; font: 500 11px/1 var(--mono); padding: 4px 8px; border-radius: 999px; }
+.pill.run { color: var(--cloud); background: var(--cloud-soft); }
+.pill.done { color: var(--ok); background: color-mix(in srgb, var(--ok) 14%, transparent); }
+.pill.open { color: var(--warn); background: color-mix(in srgb, var(--warn) 16%, transparent); }
+.chart { background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; padding: 12px; overflow-x: auto; }
+.chart svg { display: block; width: 100%; min-width: 520px; height: auto; }
+.axis { font: 400 10.5px var(--mono); fill: var(--muted); }
+footer { font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--rule); padding-top: 16px; }
+@media (max-width: 760px) { .stage { grid-template-columns: minmax(0, 1fr); } }
+
+.links { display: flex; flex-wrap: wrap; gap: 10px; }
+.links a { font: 500 13px var(--body); color: var(--ink); text-decoration: none; padding: 8px 12px; border: 1px solid var(--rule);
+  border-radius: 6px; background: var(--surface); }
+.links a:hover, .links a:focus-visible { border-color: var(--cloud); outline: none; }
+@media print {
+  :root { --bg: #ffffff; }
+  .wrap { padding-block: 0; gap: 26px; }
+  .diagram svg { min-width: 0; }
+  .chart svg { min-width: 0; }
+  .stage { break-inside: avoid; }
+  .links { display: none; }
+  a { color: inherit; }
+}
+@page { size: A4; margin: 14mm 12mm; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">YAM bimanual · ConveyorCubePick-v0 · Long-WAM</div>
+    <h1>YAM Conveyor Pipeline</h1>
+    <p class="lede">The workstation laptop simulates the task and records demonstrations. A Brev cloud box fine-tunes Long-WAM-YAM.
+      A Jetson AGX Thor serves the policy while the laptop's simulator runs the closed-loop evaluation.</p>
+    <div class="legend">
+      <span><i class="sw" style="background:var(--sim)"></i>Laptop · Isaac Sim 6 / YAMLab</span>
+      <span><i class="sw" style="background:var(--cloud)"></i>Brev · 2× RTX PRO 6000 (96 GB)</span>
+      <span><i class="sw" style="background:var(--edge)"></i>Jetson AGX Thor · 122 GB unified</span>
+    </div>
+    <div class="links">
+      <a href="https://github.com/kabilankb/yam-conveyor-longwam">Code and setup scripts</a>
+      <a href="yam-conveyor-longwam.pdf">Download PDF</a>
+      <a href="https://huggingface.co/datasets/kabilanKB/yam_conveyor_cube_rand">Dataset</a>
+      <a href="https://huggingface.co/datasets/kabilanKB/yam_conveyor_cube_rand_longwam">Long-WAM dataset copy</a>
+    </div>
+  </header>
+
+  <div class="diagram" role="img" aria-label="Pipeline diagram: laptop simulation and data generation, Brev fine-tuning, Thor policy server and evaluation loop">
+    <svg viewBox="0 0 1040 620" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker>
+      </defs>
+      <!-- lanes -->
+      <rect x="12" y="12" width="330" height="596" rx="10" fill="var(--sim-soft)"/>
+      <rect x="355" y="12" width="330" height="596" rx="10" fill="var(--cloud-soft)"/>
+      <rect x="698" y="12" width="330" height="596" rx="10" fill="var(--edge-soft)"/>
+      <text x="30" y="42" class="lane-title" fill="var(--sim)">Laptop: simulation</text>
+      <text x="30" y="60" class="lane-sub">RTX PRO 5000 Laptop · env_yamlab6</text>
+      <text x="373" y="42" class="lane-title" fill="var(--cloud)">Brev: training</text>
+      <text x="373" y="60" class="lane-sub">massedcompute_RTXPro6000x2 · $5.26/h</text>
+      <text x="716" y="42" class="lane-title" fill="var(--edge)">Thor: inference</text>
+      <text x="716" y="60" class="lane-sub">JetPack 7 · torch 2.9.1 cu130</text>
+
+      <!-- laptop boxes -->
+      <g>
+        <rect x="30" y="82" width="294" height="62" rx="7" fill="var(--surface)" stroke="var(--sim)"/>
+        <text x="44" y="106" class="box-t">1 · Conveyor scene</text>
+        <text x="44" y="126" class="box-s">belt 4–7 cm/s · 4 cm cube · blue bin</text>
+        <rect x="30" y="160" width="294" height="62" rx="7" fill="var(--surface)" stroke="var(--sim)"/>
+        <text x="44" y="184" class="box-t">2 · Scripted IK expert</text>
+        <text x="44" y="204" class="box-s">track → grasp → carry → drop · 87 %</text>
+        <rect x="30" y="238" width="294" height="62" rx="7" fill="var(--surface)" stroke="var(--sim)"/>
+        <text x="44" y="262" class="box-t">3 · LeRobot dataset</text>
+        <text x="44" y="282" class="box-s">200 eps · 79,063 frames · 3 cams 30 Hz</text>
+        <rect x="30" y="316" width="294" height="62" rx="7" fill="var(--surface)" stroke="var(--sim)"/>
+        <text x="44" y="340" class="box-t">4 · Convert for Long-WAM</text>
+        <text x="44" y="360" class="box-s">cams top/left_wrist/right_wrist · gripper 0..1</text>
+        <rect x="30" y="472" width="294" height="78" rx="7" fill="var(--surface)" stroke="var(--sim)" stroke-width="2"/>
+        <text x="44" y="496" class="box-t">9 · Closed-loop eval client</text>
+        <text x="44" y="516" class="box-s">streams 3 cams + 14-D state</text>
+        <text x="44" y="534" class="box-s">runs 24 of each 32-step chunk</text>
+      </g>
+      <!-- brev boxes -->
+      <g>
+        <rect x="373" y="160" width="294" height="62" rx="7" fill="var(--surface)" stroke="var(--cloud)"/>
+        <text x="387" y="184" class="box-t">5 · Setup</text>
+        <text x="387" y="204" class="box-s">Long-WAM · YAM ckpt · Wan VAE · UMT5</text>
+        <rect x="373" y="238" width="294" height="78" rx="7" fill="var(--surface)" stroke="var(--cloud)" stroke-width="2"/>
+        <text x="387" y="262" class="box-t">6 · Fine-tune action expert</text>
+        <text x="387" y="282" class="box-s">1.02 B trainable · video frozen</text>
+        <text x="387" y="300" class="box-s">1,216 steps × 128 · lr 1e-4 cosine</text>
+        <rect x="373" y="332" width="294" height="62" rx="7" fill="var(--surface)" stroke="var(--cloud)"/>
+        <text x="387" y="356" class="box-t">7 · Checkpoints every 250 steps</text>
+        <text x="387" y="376" class="box-s">action expert + proprio ≈ 2 GB each</text>
+      </g>
+      <!-- thor boxes -->
+      <g>
+        <rect x="716" y="332" width="294" height="62" rx="7" fill="var(--surface)" stroke="var(--edge)"/>
+        <text x="730" y="356" class="box-t">8a · Merge into base policy</text>
+        <text x="730" y="376" class="box-s">base model.pt + fine-tuned action expert</text>
+        <rect x="716" y="472" width="294" height="78" rx="7" fill="var(--surface)" stroke="var(--edge)" stroke-width="2"/>
+        <text x="730" y="496" class="box-t">8b · Policy server (TCP :8780)</text>
+        <text x="730" y="516" class="box-s">IDM: 4 video steps to σ 0.9</text>
+        <text x="730" y="534" class="box-s">10 action steps · 2.06 s / chunk</text>
+        <rect x="716" y="82" width="294" height="62" rx="7" fill="var(--surface)" stroke="var(--edge)" stroke-dasharray="4 3"/>
+        <text x="730" y="106" class="box-t">Side · Imagination video</text>
+        <text x="730" y="126" class="box-s">LongLive2.0-Robot-S · 5.2 s 1280×704</text>
+      </g>
+      <!-- flows -->
+      <g stroke="var(--muted)" stroke-width="1.6" fill="none" marker-end="url(#ah)">
+        <path d="M177 144 V158"/><path d="M177 222 V236"/><path d="M177 300 V314"/>
+        <path d="M324 347 C 350 347, 345 280, 371 280"/>
+        <path d="M520 222 V236"/><path d="M520 316 V330"/>
+        <path d="M667 363 H714" stroke-dasharray="6 4"/>
+        <path d="M863 394 V470"/>
+        <path d="M714 500 H326"/>
+        <path d="M326 528 H714"/>
+        <path d="M324 113 C 520 113, 560 113, 714 113" stroke-dasharray="3 4"/>
+      </g>
+      <text x="350" y="262" class="flow-l" text-anchor="middle">HF dataset</text>
+      <text x="690" y="352" class="flow-l" text-anchor="middle">ckpt</text>
+      <text x="690" y="404" class="flow-l" text-anchor="middle" fill="var(--warn)">route pending</text>
+      <text x="520" y="494" class="flow-l" text-anchor="middle">32 × 14 action chunk</text>
+      <text x="520" y="548" class="flow-l" text-anchor="middle">JPEG mosaic + state, every step</text>
+      <text x="520" y="106" class="flow-l" text-anchor="middle">start frame + prompt</text>
+      <text x="177" y="585" class="lane-sub" text-anchor="middle">results.json · npz · mp4 per episode</text>
+      <text x="520" y="585" class="lane-sub" text-anchor="middle">HF datasets: kabilanKB/yam_conveyor_cube_rand(_longwam)</text>
+    </svg>
+  </div>
+
+  <section aria-labelledby="now">
+    <h2 id="now">Status</h2>
+    <div class="status">
+      <div class="stat"><span class="pill done">done</span><b>200 / 229</b><small>demonstrations kept (87 %), all failures were missed grasps</small></div>
+      <div class="stat"><span class="pill done">done</span><b>0 / 10</b><small>pretrained Long-WAM-YAM on the conveyor, before fine-tuning</small></div>
+      <div class="stat"><span class="pill run">running</span><b>200 / 1,216</b><small>fine-tune steps at 10:56 UTC, ~9.7 s per step</small></div>
+      <div class="stat"><span class="pill open">open</span><b>step 250</b><small>first checkpoint; transfer route to Hugging Face and the Thor still to choose</small></div>
+    </div>
+    <div class="chart">
+      <svg viewBox="0 0 640 220" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Action loss by training step, steps 10 to 200">
+        <g class="axis">
+          <text x="44" y="26" text-anchor="end">0.07</text><text x="44" y="74" text-anchor="end">0.05</text>
+          <text x="44" y="122" text-anchor="end">0.03</text><text x="44" y="170" text-anchor="end">0.01</text>
+          <text x="44" y="194" text-anchor="end">0</text>
+          <text x="62" y="210" text-anchor="middle">10</text><text x="200" y="210" text-anchor="middle">60</text>
+          <text x="338" y="210" text-anchor="middle">110</text><text x="476" y="210" text-anchor="middle">160</text>
+          <text x="586" y="210" text-anchor="middle">200</text>
+        </g>
+        <g stroke="var(--rule)" stroke-width="1">
+          <line x1="50" x2="620" y1="22" y2="22"/><line x1="50" x2="620" y1="70" y2="70"/>
+          <line x1="50" x2="620" y1="118" y2="118"/><line x1="50" x2="620" y1="166" y2="166"/>
+          <line x1="50" x2="620" y1="190" y2="190"/>
+        </g>
+        <!-- x = 62 + (step-10)*2.76 ; y = 190 - loss*2400 -->
+        <polyline fill="none" stroke="var(--cloud)" stroke-opacity=".35" stroke-width="1.5"
+          points="62.0,33.0 89.6,77.0 117.2,87.0 144.8,170.6 172.4,71.4 200.0,86.3 227.6,113.9 255.2,180.2 282.8,155.7 310.4,138.2 338.0,154.2 365.6,155.9 393.2,156.9 420.8,120.6 448.4,135.8 476.0,179.2 503.6,162.2 531.2,152.3 558.8,153.3 586.4,151.6"/>
+        <polyline fill="none" stroke="var(--cloud)" stroke-width="2.5" stroke-linejoin="round"
+          points="62.0,33.0 89.6,55.0 117.2,65.7 144.8,91.9 172.4,101.5 200.0,103.8 227.6,110.6 255.2,113.0 282.8,134.0 310.4,147.0 338.0,157.1 365.6,151.0 393.2,151.3 420.8,146.9 448.4,142.3 476.0,148.1 503.6,149.4 531.2,157.4 558.8,161.7 586.4,154.8"/>
+        <circle cx="586.4" cy="154.8" r="4" fill="var(--cloud)"/>
+        <text x="596" y="145" class="axis">0.0146 avg</text>
+        <text x="62" y="12" class="axis" text-anchor="start">action loss (light: logged value · bold: 4-point running mean)</text>
+      </svg>
+    </div>
+  </section>
+
+  <section aria-labelledby="ev">
+    <h2 id="ev">Stage by stage</h2>
+
+    <div class="stage">
+      <div>
+        <span class="tag sim">laptop · 1</span>
+        <h3>Conveyor scene in YAMLab</h3>
+        <p>A 4 cm red cube rides the belt toward the right arm, which drops it in the blue bin. The belt is a static
+          low-friction collider; each control step the env sets the cube's velocity while it lies on the belt and is not held.</p>
+        <dl><dt>Task</dt><dd>ConveyorCubePick-v0</dd><dt>Sim</dt><dd>Isaac Sim 6.0.1 · Isaac Lab 3</dd><dt>Control</dt><dd>30 Hz, 14-D joint targets</dd></dl>
+      </div>
+      <figure><img src="img/scene.jpg" alt="Top camera view of two YAM arms, a black conveyor belt with a red cube, and a blue bin" loading="lazy">
+        <figcaption>Top camera, 1280×704 render. This frame is also the start image for the imagination video.</figcaption></figure>
+    </div>
+
+    <div class="stage">
+      <div>
+        <span class="tag sim">laptop · 2–3</span>
+        <h3>Scripted expert and randomization</h3>
+        <p>Damped-least-squares IK on a fingertip tool point. A one-time calibration solves a ready pose and a pose over the bin;
+          joint-space moves connect them. Only successful attempts are recorded.</p>
+        <dl><dt>Randomized</dt><dd>belt speed, cube pose ±45°, bin ±5/±6 cm, lighting + HDRI</dd>
+          <dt>Kept</dt><dd>200 of 229 attempts · 274–564 steps each</dd></dl>
+      </div>
+      <div style="display:grid;gap:12px">
+        <figure><img src="img/expert.jpg" alt="Eight frames of the expert: ready, hover, track, close, carry, retreat" loading="lazy">
+          <figcaption>One expert episode, phase names burned in: ready → hover → track → close → carry → release.</figcaption></figure>
+        <figure><img src="img/randomization.jpg" alt="Three episodes with different lighting colours and bin positions" loading="lazy">
+          <figcaption>Per-episode lighting and bin position.</figcaption></figure>
+      </div>
+    </div>
+
+    <div class="stage">
+      <div>
+        <span class="tag sim">laptop · 4</span>
+        <h3>What Long-WAM sees</h3>
+        <p>Each sample is a 384×320 mosaic: the top camera above both wrist cameras. It covers 1.6 s of history
+          (21 of 81 frames), the robot state, and the next 32 actions to predict.</p>
+        <dl><dt>Per camera</dt><dd>240×320 → 224×224</dd><dt>Norm</dt><dd>checkpoint's dataset_stats.json</dd></dl>
+      </div>
+      <figure><img src="img/mosaic.jpg" alt="Four mosaic frames: top view above left and right wrist views" loading="lazy">
+        <figcaption>Frames from one training sample as decoded by Long-WAM's own data loader.</figcaption></figure>
+    </div>
+
+    <div class="stage">
+      <div>
+        <span class="tag cloud">brev · 5–7</span>
+        <h3>Fine-tuning on Brev</h3>
+        <p>The run starts from the full Long-WAM-YAM policy and trains only the 1.02 B action expert.
+          The frozen video expert still imagines the future at σ 0.9, so the extra video-loss pass is skipped.
+          That halves the step time to about 9.7 s.</p>
+        <dl><dt>Batch</dt><dd>8 / GPU × 2 GPUs × 8 accum = 128</dd><dt>Schedule</dt><dd>2 epochs · 1,216 steps · 5 % warmup</dd>
+          <dt>Optimizer</dt><dd>AdamW β (0.9, 0.95) · wd 0.01 · clip 1.0 · bf16</dd><dt>Note</dt><dd>NCCL_SHM_DISABLE=1 on this VM</dd></dl>
+      </div>
+      <figure><img src="img/baseline.jpg" alt="Four frames of a failed baseline episode: the arm moves but never grasps" loading="lazy">
+        <figcaption>Before fine-tuning: a baseline episode on the Thor-served policy. The arms move, but the gripper never closes (0/10).</figcaption></figure>
+    </div>
+
+    <div class="stage">
+      <div>
+        <span class="tag edge">thor · side</span>
+        <h3>Imagination video</h3>
+        <p>LongLive2.0-Robot-S generated this from the start frame and the prompt “right gripper picks up the red cube from the conveyor belt
+          and places it into the blue bin”, without FlashAttention (PyTorch SDPA fallback). The scene stays consistent and an arm
+          grasps the cube, but the model chooses the arm on the image's left.</p>
+        <dl><dt>Output</dt><dd>125 frames · 24 fps · 1280×704</dd><dt>Time</dt><dd>≈ 9 min on Thor</dd></dl>
+      </div>
+      <figure><img src="img/imagination.jpg" alt="Eight generated frames: an arm reaches across the belt and grasps the red cube" loading="lazy">
+        <figcaption>Generated frames f=0 to f=124: these frames are imagined, not simulated.</figcaption></figure>
+    </div>
+  </section>
+
+  <footer>Long-WAM (NVlabs LongLive, arXiv 2610.10528) · checkpoints Efficient-Large-Model/Long-WAM-YAM and LongLive2.0-Robot-S ·
+    status as of 20 Nov 2026, 10:56 UTC.</footer>
+</div>
+
+</body>
+</html>

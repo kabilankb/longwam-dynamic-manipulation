@@ -1,0 +1,163 @@
+diff --git a/Long-WAM/configs/train.yaml b/Long-WAM/configs/train.yaml
+index d40c76a..abf3a79 100644
+--- a/Long-WAM/configs/train.yaml
++++ b/Long-WAM/configs/train.yaml
+@@ -60,6 +60,7 @@ checkpoint_strict: false
+ #   adapter: libero_to_robocasa
+ #   gripper: null  # map only with explicit normalized source/target min/max
+ init_checkpoint: null
++train_modules: all  # all | action (local YAM option, see trainer.py)
+ 
+ # wandb
+ wandb:
+diff --git a/Long-WAM/src/longwam/models/wan22/longwam_base.py b/Long-WAM/src/longwam/models/wan22/longwam_base.py
+index 04effef..4bca23a 100644
+--- a/Long-WAM/src/longwam/models/wan22/longwam_base.py
++++ b/Long-WAM/src/longwam/models/wan22/longwam_base.py
+@@ -854,39 +854,48 @@ class LongWAMBase(InferenceModelMixin, torch.nn.Module):
+         noisy_action = self.train_action_scheduler.add_noise(action, noise_action, timestep_action)
+         target_action = self.train_action_scheduler.training_target(action, noise_action, timestep_action)
+ 
+-        video_pre = self.video_expert.pre_dit(
+-            x=latents,
+-            timestep=timestep_video,
+-            context=context,
+-            context_mask=context_mask,
+-            action=None if joint_denoise else action,
+-            fuse_vae_embedding_in_latents=inputs["fuse_vae_embedding_in_latents"],
+-            num_clean_frames=self.num_clean_frames,
+-        )
+-
+         action_pre = self.action_expert.pre_dit(
+             action_tokens=noisy_action,
+             timestep=timestep_action,
+             context=context,
+             context_mask=context_mask,
+         )
+-
+-        video_tokens = video_pre["tokens"]
+         action_tokens = action_pre["tokens"]
+ 
+-        # Joint mode predicts independently noised video and action in one MoT pass. Sequential P4
+-        # keeps the original detached-imagination action pass below.
+-        tokens_out = self._mot_forward(
+-            video_tokens=video_tokens,
+-            action_tokens=action_tokens,
+-            video_pre=video_pre,
+-            action_pre=action_pre,
+-            num_imagine_frames=k if joint_denoise else 0,
++        # Local change: with the video loss off (lambda_video == 0, e.g. train_modules=action), PASS A only
++        # produced loss_video and an action prediction that PASS B discards, so skip it entirely.
++        skip_pass_a = (
++            self.loss_lambda_video == 0.0
++            and not joint_denoise
++            and k > 0
++            and inputs["first_frame_latents"] is not None
+         )
++        pred_video = None
++        if not skip_pass_a:
++            video_pre = self.video_expert.pre_dit(
++                x=latents,
++                timestep=timestep_video,
++                context=context,
++                context_mask=context_mask,
++                action=None if joint_denoise else action,
++                fuse_vae_embedding_in_latents=inputs["fuse_vae_embedding_in_latents"],
++                num_clean_frames=self.num_clean_frames,
++            )
++            video_tokens = video_pre["tokens"]
++
++            # Joint mode predicts independently noised video and action in one MoT pass. Sequential P4
++            # keeps the original detached-imagination action pass below.
++            tokens_out = self._mot_forward(
++                video_tokens=video_tokens,
++                action_tokens=action_tokens,
++                video_pre=video_pre,
++                action_pre=action_pre,
++                num_imagine_frames=k if joint_denoise else 0,
++            )
+ 
+-        pred_video = self.video_expert.post_dit(tokens_out["video"], video_pre)
++            pred_video = self.video_expert.post_dit(tokens_out["video"], video_pre)
+ 
+-        pred_action = self.action_expert.post_dit(tokens_out["action"], action_pre)
++            pred_action = self.action_expert.post_dit(tokens_out["action"], action_pre)
+ 
+         # PASS B — P4 joint imagination (k>0 only). The action reads the first k FUTURE latent frames at a
+         # HIGH fixed sigma (genuine imagination, never sigma=0/GT). We build a SECOND noised version of the
+@@ -972,24 +981,27 @@ class LongWAMBase(InferenceModelMixin, torch.nn.Module):
+             # discarded; loss_video is still computed from PASS A's pred_video below).
+             pred_action = self.action_expert.post_dit(action_tokens_hi, action_pre_hi)
+ 
+-        include_initial_video_step = inputs["first_frame_latents"] is None
+-        if inputs["first_frame_latents"] is not None:
+-            # v0b: drop the first `num_clean_frames` clean latent frames from the video loss (no loss
+-            # on the given clean obs); keep loss only on the noised future frames. M=1 -> v0a `[:, :, 1:]`.
+-            pred_video = pred_video[:, :, self.num_clean_frames:]
+-            target_video = target_video[:, :, self.num_clean_frames:]
+-
+-        loss_video_per_sample = self._compute_video_loss_per_sample(
+-            pred_video=pred_video,
+-            target_video=target_video,
+-            image_is_pad=image_is_pad,
+-            include_initial_video_step=include_initial_video_step,
+-            num_clean_frames=self.num_clean_frames,
+-        )
+-        video_weight = self.train_video_scheduler.training_weight(timestep_video).to(
+-            loss_video_per_sample.device, dtype=loss_video_per_sample.dtype
+-        )
+-        loss_video = (loss_video_per_sample * video_weight).mean()
++        if pred_video is None:  # PASS A skipped (video loss off)
++            loss_video = torch.zeros((), device=self.device, dtype=torch.float32)
++        else:
++            include_initial_video_step = inputs["first_frame_latents"] is None
++            if inputs["first_frame_latents"] is not None:
++                # v0b: drop the first `num_clean_frames` clean latent frames from the video loss (no loss
++                # on the given clean obs); keep loss only on the noised future frames. M=1 -> v0a `[:, :, 1:]`.
++                pred_video = pred_video[:, :, self.num_clean_frames:]
++                target_video = target_video[:, :, self.num_clean_frames:]
++
++            loss_video_per_sample = self._compute_video_loss_per_sample(
++                pred_video=pred_video,
++                target_video=target_video,
++                image_is_pad=image_is_pad,
++                include_initial_video_step=include_initial_video_step,
++                num_clean_frames=self.num_clean_frames,
++            )
++            video_weight = self.train_video_scheduler.training_weight(timestep_video).to(
++                loss_video_per_sample.device, dtype=loss_video_per_sample.dtype
++            )
++            loss_video = (loss_video_per_sample * video_weight).mean()
+ 
+         loss_action = self._action_flow_matching_loss(
+             pred_action=pred_action,
+diff --git a/Long-WAM/src/longwam/trainer.py b/Long-WAM/src/longwam/trainer.py
+index 2db1497..858283d 100644
+--- a/Long-WAM/src/longwam/trainer.py
++++ b/Long-WAM/src/longwam/trainer.py
+@@ -210,9 +210,25 @@ class Wan22Trainer:
+         # This keeps DiT (+ optional proprio encoder) as trainable when ZeRO builds optimizer state.
+         self._apply_dit_only_train_mode(self.model)
+         trainable_params = list(self.model.dit.parameters())
++        # Local option (YAM fine-tune): `train_modules: action` freezes the video expert and
++        # optimizes only the action expert (+ proprio adapter). The action loss never reaches the
++        # video expert anyway (its cache is detached), so this drops the video loss's updates and
++        # ~5B parameters of optimizer state.
++        self.train_modules = str(self.cfg.get("train_modules", "all"))
++        if self.train_modules not in ("all", "action"):
++            raise ValueError(f"`train_modules` must be 'all' or 'action', got {self.train_modules!r}.")
++        if self.train_modules == "action":
++            action_expert = getattr(self.model, "action_expert", None)
++            if action_expert is None:
++                raise ValueError("train_modules=action needs a model with an `action_expert`.")
++            self.model.dit.requires_grad_(False)
++            action_expert.requires_grad_(True)
++            trainable_params = list(action_expert.parameters())
+         proprio_encoder = getattr(self.model, "proprio_encoder", None)
+         if proprio_encoder is not None:
+             trainable_params.extend(list(proprio_encoder.parameters()))
++        logger.info("Trainable modules: %s (%.2fB parameters)", self.train_modules,
++                    sum(p.numel() for p in trainable_params) / 1e9)
+         self.optimizer = torch.optim.AdamW(
+             trainable_params,
+             lr=self.learning_rate,

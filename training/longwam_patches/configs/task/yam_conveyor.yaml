@@ -1,0 +1,36 @@
+# @package _global_
+# Fine-tune Long-WAM-YAM on the YAMLab conveyor dataset.
+#   resume=<checkpoints/yam/model.pt> loads the full YAM policy before the optimizer is built.
+#   train_modules: all (video + action experts) | action (action expert + proprio adapter only).
+defaults:
+- override /data: yam_conveyor
+- override /model: long_wam
+- _self_
+output_dir: ${oc.env:LONGWAM_OUTPUT_ROOT,./outputs}/yam_conveyor/${now:%Y%m%d_%H%M%S}
+resume: ${oc.env:LONGWAM_CHECKPOINT_ROOT,./checkpoints}/yam/model.pt
+train_modules: all
+batch_size: 8
+num_workers: 8
+num_epochs: 4
+save_every: 500
+eval_every: 0
+gradient_accumulation_steps: 8   # 2 GPUs x 8 x 8 = global batch 128
+expected_global_batch_size: 128
+learning_rate: 3.0e-5
+lr_warmup_ratio: 0.05
+weight_decay: 0.01
+adam_beta1: 0.9
+adam_beta2: 0.95
+adam_epsilon: 1.0e-08
+model_init_seed: 42
+wandb:
+  name: yam_conveyor
+  group: yam_conveyor
+model:
+  # Weights come from `resume` (the full YAM policy): skip every pretrained initializer.
+  longlive_video_weights: null
+  action_dit_pretrained_path: null
+  skip_dit_load_from_pretrain: true
+  skip_video_dit_load_from_pretrain: true
+  skip_action_dit_load_from_pretrain: true
+  proprio_dim: 14
