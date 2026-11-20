@@ -136,6 +136,10 @@ tmux new -s train 'bash ~/yam-conveyor-longwam/training/train.sh action'   # or:
 | `action` | action expert + proprio | lr 1e-4, 4 epochs, global batch 128 (2 GPUs × 8 × accum 8), save every 500 |
 | `full` | video + action experts | lr 3e-5, same schedule, Accelerate ZeRO-1 |
 
+Measured run (2 epochs, action expert): 5.21 h on `massedcompute_RTXPro6000x2` at $5.26/h = **$27.40**
+(setup 0.4 h, training 3.3 h, checkpoint downloads 1.5 h). Upload checkpoints straight to Hugging Face from
+the instance where possible: relaying 2 GB files through a home connection cost about $8 of idle GPU time.
+
 Outputs go to `~/longwam/outputs/yam_conveyor/<timestamp>/`. With `train_modules: action` only the action
 expert changes, so cut each 12 GB `checkpoints/weights/step_XXXXXX.pt` down to a ~2 GB action delta before moving it:
 `python training/extract_action_delta.py step_000250.pt action_step_000250.pt --base <base>/model.pt`
