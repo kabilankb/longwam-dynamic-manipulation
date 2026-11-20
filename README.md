@@ -4,7 +4,6 @@ Teaching a YAM bimanual robot to pick a cube off a moving conveyor with Long-WAM
 YAMLab simulation and data generation, cloud fine-tuning on Brev, and policy serving on a Jetson AGX Thor.
 
 **Project page:** https://kabilankb.github.io/longwam-dynamic-manipulation/ ·
-**PDF:** [docs/longwam-dynamic-manipulation.pdf](docs/longwam-dynamic-manipulation.pdf) ·
 **Data:** [yam_conveyor_cube_rand](https://huggingface.co/datasets/kabilanKB/yam_conveyor_cube_rand),
 [Long-WAM copy](https://huggingface.co/datasets/kabilanKB/yam_conveyor_cube_rand_longwam)
 
@@ -30,7 +29,7 @@ Machine addresses are never hard-coded: pass them as arguments or environment va
 | `eval/thor/` | `setup_thor.sh`, `serve_yam.sh`, policy server (`longwam_yam_server.py`), wire protocol, mock server |
 | `eval/client/` | `eval_longwam_remote.py` closed-loop YAMLab evaluation against the server |
 | `video/` | `run_on_thor.sh`, Stage-1 SDPA patch, a 1280×704 start frame of the scene |
-| `docs/` | GitHub Pages site (pipeline diagram, status, reference images) and its PDF |
+| `docs/` | GitHub Pages site (pipeline diagram, status, reference images) |
 
 ## 1. Simulation and data (workstation with an RTX GPU)
 
