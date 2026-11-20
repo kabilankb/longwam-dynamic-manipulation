@@ -74,6 +74,16 @@ dd { margin: 0; font-family: var(--mono); font-size: 12.5px; font-variant-numeri
 .chart { background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; padding: 12px; overflow-x: auto; }
 .chart svg { display: block; width: 100%; min-width: 520px; height: auto; }
 .axis { font: 400 10.5px var(--mono); fill: var(--muted); }
+
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+.tablewrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { font: 500 11.5px var(--mono); letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+tbody tr:last-child td { border-bottom: 0; }
+tr.ref td { color: var(--muted); }
+td:nth-child(2) { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 72ch; }
 footer { font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--rule); padding-top: 16px; }
 @media (max-width: 760px) { .stage { grid-template-columns: minmax(0, 1fr); } }
 
@@ -111,6 +121,7 @@ footer { font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--rul
       <a href="yam-conveyor-longwam.pdf">Download PDF</a>
       <a href="https://huggingface.co/datasets/kabilanKB/yam_conveyor_cube_rand">Dataset</a>
       <a href="https://huggingface.co/datasets/kabilanKB/yam_conveyor_cube_rand_longwam">Long-WAM dataset copy</a>
+      <a href="https://huggingface.co/kabilanKB/longwam-yam-conveyor">Fine-tuned checkpoints</a>
     </div>
   </header>
 
@@ -189,7 +200,7 @@ footer { font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--rul
       </g>
       <text x="350" y="262" class="flow-l" text-anchor="middle">HF dataset</text>
       <text x="690" y="352" class="flow-l" text-anchor="middle">ckpt</text>
-      <text x="690" y="404" class="flow-l" text-anchor="middle" fill="var(--warn)">route pending</text>
+      <text x="690" y="404" class="flow-l" text-anchor="middle">via laptop + HF</text>
       <text x="520" y="494" class="flow-l" text-anchor="middle">32 × 14 action chunk</text>
       <text x="520" y="548" class="flow-l" text-anchor="middle">JPEG mosaic + state, every step</text>
       <text x="520" y="106" class="flow-l" text-anchor="middle">start frame + prompt</text>
@@ -202,35 +213,65 @@ footer { font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--rul
     <h2 id="now">Status</h2>
     <div class="status">
       <div class="stat"><span class="pill done">done</span><b>200 / 229</b><small>demonstrations kept (87 %), all failures were missed grasps</small></div>
-      <div class="stat"><span class="pill done">done</span><b>0 / 10</b><small>pretrained Long-WAM-YAM on the conveyor, before fine-tuning</small></div>
-      <div class="stat"><span class="pill run">running</span><b>200 / 1,216</b><small>fine-tune steps at 10:56 UTC, ~9.7 s per step</small></div>
-      <div class="stat"><span class="pill open">open</span><b>step 250</b><small>first checkpoint; transfer route to Hugging Face and the Thor still to choose</small></div>
+      <div class="stat"><span class="pill done">done</span><b>1,216 steps</b><small>action-expert fine-tune, 2 epochs, 3 h 20 min; loss 0.024 → 0.005</small></div>
+      <div class="stat"><span class="pill run">evaluating</span><b>0 / 10 → 0 / 10</b><small>pretrained → step 250 success; final model eval running</small></div>
+      <div class="stat"><span class="pill done">done</span><b>≈ $24</b><small>Brev 2× RTX PRO 6000 at $5.26/h, deleted after the checkpoint downloads</small></div>
     </div>
     <div class="chart">
-      <svg viewBox="0 0 640 220" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Action loss by training step, steps 10 to 200">
+      <svg viewBox="0 0 640 220" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Action loss by training step, steps 10 to 1216">
         <g class="axis">
           <text x="44" y="26" text-anchor="end">0.07</text><text x="44" y="74" text-anchor="end">0.05</text>
           <text x="44" y="122" text-anchor="end">0.03</text><text x="44" y="170" text-anchor="end">0.01</text>
           <text x="44" y="194" text-anchor="end">0</text>
-          <text x="62" y="210" text-anchor="middle">10</text><text x="200" y="210" text-anchor="middle">60</text>
-          <text x="338" y="210" text-anchor="middle">110</text><text x="476" y="210" text-anchor="middle">160</text>
-          <text x="586" y="210" text-anchor="middle">200</text>
+          <text x="62" y="210" text-anchor="middle">10</text><text x="196" y="210" text-anchor="middle">300</text><text x="335" y="210" text-anchor="middle">600</text><text x="474" y="210" text-anchor="middle">900</text><text x="620" y="210" text-anchor="middle">1216</text>
         </g>
         <g stroke="var(--rule)" stroke-width="1">
           <line x1="50" x2="620" y1="22" y2="22"/><line x1="50" x2="620" y1="70" y2="70"/>
           <line x1="50" x2="620" y1="118" y2="118"/><line x1="50" x2="620" y1="166" y2="166"/>
           <line x1="50" x2="620" y1="190" y2="190"/>
         </g>
-        <!-- x = 62 + (step-10)*2.76 ; y = 190 - loss*2400 -->
+        <!-- x = 62 + (step-10)*558/1206 ; y = 190 - loss*2400 -->
         <polyline fill="none" stroke="var(--cloud)" stroke-opacity=".35" stroke-width="1.5"
-          points="62.0,33.0 89.6,77.0 117.2,87.0 144.8,170.6 172.4,71.4 200.0,86.3 227.6,113.9 255.2,180.2 282.8,155.7 310.4,138.2 338.0,154.2 365.6,155.9 393.2,156.9 420.8,120.6 448.4,135.8 476.0,179.2 503.6,162.2 531.2,152.3 558.8,153.3 586.4,151.6"/>
+          points="62.0,33.0 66.6,77.0 71.3,87.0 75.9,170.6 80.5,71.4 85.1,86.3 89.8,113.9 94.4,180.2 99.0,155.7 103.6,138.2 108.3,154.2 112.9,155.9 117.5,156.9 122.1,120.6 126.8,135.8 131.4,179.2 136.0,162.2 140.7,152.3 145.3,153.3 149.9,151.6 154.5,151.1 159.2,160.7 163.8,177.8 168.4,147.8 173.0,153.8 177.7,168.2 182.3,167.9 186.9,171.8 191.6,163.8 196.2,158.6 200.8,146.6 205.4,161.7 210.1,159.5 214.7,179.4 219.3,166.7 223.9,179.7 228.6,172.0 233.2,122.6 237.8,169.4 242.4,165.0 247.1,169.6 251.7,158.6 256.3,167.0 261.0,165.0 265.6,173.2 270.2,174.6 274.8,161.7 279.5,158.8 284.1,182.3 288.7,178.2 293.3,164.6 298.0,181.4 302.6,170.8 307.2,155.0 311.9,159.5 316.5,166.7 321.1,171.0 325.7,173.9 330.4,164.6 335.0,173.0 339.6,170.1 344.2,170.6 348.9,160.7 353.5,174.4 358.1,176.8 362.7,182.3 367.4,171.8 372.0,180.4 376.6,183.8 381.3,175.1 385.9,166.5 390.5,182.3 395.1,177.8 399.8,167.4 404.4,158.8 409.0,181.1 413.6,177.8 418.3,166.7 422.9,176.6 427.5,174.6 432.1,171.3 436.8,183.8 441.4,162.4 446.0,167.2 450.7,168.6 455.3,183.3 459.9,180.6 464.5,176.3 469.2,175.8 473.8,179.9 478.4,180.6 483.0,186.6 487.7,159.3 492.3,164.8 496.9,180.4 501.6,181.6 506.2,178.2 510.8,183.8 515.4,174.2 520.1,179.9 524.7,181.6 529.3,176.8 533.9,163.8 538.6,176.8 543.2,172.7 547.8,174.9 552.4,183.0 557.1,173.7 561.7,183.0 566.3,176.8 571.0,178.2 575.6,181.8 580.2,179.0 584.8,179.9 589.5,187.4 594.1,184.7 598.7,181.8 603.3,172.5 608.0,171.5 612.6,181.6 617.2,168.9"/>
         <polyline fill="none" stroke="var(--cloud)" stroke-width="2.5" stroke-linejoin="round"
-          points="62.0,33.0 89.6,55.0 117.2,65.7 144.8,91.9 172.4,101.5 200.0,103.8 227.6,110.6 255.2,113.0 282.8,134.0 310.4,147.0 338.0,157.1 365.6,151.0 393.2,151.3 420.8,146.9 448.4,142.3 476.0,148.1 503.6,149.4 531.2,157.4 558.8,161.7 586.4,154.8"/>
-        <circle cx="586.4" cy="154.8" r="4" fill="var(--cloud)"/>
-        <text x="596" y="145" class="axis">0.0146 avg</text>
-        <text x="62" y="12" class="axis" text-anchor="start">action loss (light: logged value · bold: 4-point running mean)</text>
+          points="62.0,33.0 66.6,55.0 71.3,65.7 75.9,91.9 80.5,87.8 85.1,87.6 89.8,91.3 94.4,102.4 99.0,108.3 103.6,111.3 108.3,123.4 112.9,131.3 117.5,138.3 122.1,133.3 126.8,139.8 131.4,149.1 136.0,153.9 140.7,151.1 145.3,150.9 149.9,152.2 154.5,151.9 159.2,152.4 163.8,154.5 168.4,157.2 173.0,159.0 177.7,157.9 182.3,158.4 186.9,160.4 191.6,161.4 196.2,162.1 200.8,161.7 205.4,161.8 210.1,160.0 214.7,163.1 219.3,164.4 223.9,165.6 228.6,166.0 233.2,161.1 237.8,161.6 242.4,162.3 247.1,164.6 251.7,164.2 256.3,165.0 261.0,163.6 265.6,164.2 270.2,163.7 274.8,162.7 279.5,166.3 284.1,167.6 288.7,168.9 293.3,168.4 298.0,170.7 302.6,171.1 307.2,170.1 311.9,168.7 316.5,167.9 321.1,168.8 325.7,170.3 330.4,168.6 335.0,168.0 339.6,168.6 344.2,167.5 348.9,166.5 353.5,168.4 358.1,170.2 362.7,171.7 367.4,171.8 372.0,172.5 376.6,174.4 381.3,174.6 385.9,174.2 390.5,175.4 395.1,177.1 399.8,176.4 404.4,174.6 409.0,174.5 413.6,175.1 418.3,173.7 422.9,173.0 427.5,173.0 432.1,173.4 436.8,173.6 441.4,172.0 446.0,172.0 450.7,173.0 455.3,173.2 459.9,173.5 464.5,174.5 469.2,174.4 473.8,174.9 478.4,175.9 483.0,176.2 487.7,175.8 492.3,175.6 496.9,176.8 501.6,176.6 506.2,176.4 510.8,177.1 515.4,176.9 520.1,176.9 524.7,177.0 529.3,176.1 533.9,176.5 538.6,177.7 543.2,176.9 547.8,176.3 552.4,176.8 557.1,175.7 561.7,176.6 566.3,176.3 571.0,176.0 575.6,176.5 580.2,178.0 584.8,178.3 589.5,179.8 594.1,180.8 598.7,180.6 603.3,180.5 608.0,179.4 612.6,179.8 617.2,178.9"/>
+        <circle cx="617.2" cy="178.9" r="4" fill="var(--cloud)"/>
+        <text x="613" y="167" class="axis" text-anchor="end">0.0046 avg</text>
+        <text x="62" y="12" class="axis" text-anchor="start">action loss over the full run (light: logged every 10 steps · bold: 100-step running mean)</text>
       </svg>
     </div>
+  </section>
+
+  <section aria-labelledby="res">
+    <h2 id="res">Results so far</h2>
+    <p>Closed-loop evaluation in the laptop's YAMLab sim against the policy served from the Thor: 10 episodes, 600 control steps (20 s)
+      each, lighting and bin randomization on. Success requires lifting the cube off the belt and leaving it in the bin.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Policy</th><th>Success</th><th>Left arm motion</th><th>Right arm</th><th>Right gripper closes</th></tr></thead>
+      <tbody>
+        <tr><td>Pretrained Long-WAM-YAM</td><td>0 / 10</td><td>1.68 rad (flails)</td><td>wanders</td><td>no (min 0.87)</td></tr>
+        <tr><td>Step 250</td><td>0 / 10</td><td>0.25 rad</td><td>holds the expert's hover pose</td><td>no (min 0.94)</td></tr>
+        <tr><td>Final, step 1,216</td><td>0 / 3 so far</td><td>0.07 rad</td><td>hovers and follows the cube</td><td>no (min 0.94)</td></tr>
+        <tr class="ref"><td>Demonstrations</td><td>—</td><td>0</td><td>descends onto the cube</td><td>yes (0.00)</td></tr>
+      </tbody>
+    </table></div>
+    <p>Fine-tuning moved the policy toward the demonstrations: the idle arm stays home and the working arm waits above the belt and
+      follows the cube. It does not yet make the final dive and close the gripper, so no episode reaches the pick.
+      Gripper values use the checkpoint's convention, where 1 is open.</p>
+    <div class="pair">
+      <figure><img src="img/eval_step250.jpg" alt="Step 250 episode: right arm hovers over the belt while the cube passes" loading="lazy">
+        <figcaption>Step 250: the arm reaches the hover pose; the cube passes underneath and stops at the end of the belt.</figcaption></figure>
+      <figure><img src="img/eval_final.jpg" alt="Final model episode: right arm follows the cube but does not descend" loading="lazy">
+        <figcaption>Final model: the wrist camera has the cube right below the gripper at 5.7 s, but the arm stays above it.</figcaption></figure>
+    </div>
+    <h3>Next experiments</h3>
+    <ul>
+      <li><b>Replan more often.</b> The eval executes 24 of each 32-step chunk (0.8 s) while the cube moves 3–6 cm. Replanning every
+        8 steps needs no retraining.</li>
+      <li><b>Full fine-tune.</b> The video expert stayed frozen, so the imagined future that the actions are conditioned on still
+        comes from the pretraining data. Training both experts adapts it to this scene (about 8–10 h on two RTX PRO 6000).</li>
+      <li><b>More demonstrations.</b> The loss was still falling at step 1,216 (0.0050).</li>
+    </ul>
   </section>
 
   <section aria-labelledby="ev">
@@ -306,7 +347,7 @@ footer { font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--rul
   </section>
 
   <footer>Long-WAM (NVlabs LongLive, arXiv 2610.10528) · checkpoints Efficient-Large-Model/Long-WAM-YAM and LongLive2.0-Robot-S ·
-    status as of 20 Nov 2026, 10:56 UTC.</footer>
+    updated 20 Nov 2026, 15:10 UTC (final-model eval in progress).</footer>
 </div>
 
 </body>

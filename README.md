@@ -183,9 +183,11 @@ What the client does:
 The sim waits for each chunk, so inference latency does not change the physics.
 `eval/thor/mock_server.py` (hold-pose chunks) tests the client without a model.
 
-Results so far:
-- Pretrained Long-WAM-YAM, zero-shot (no fine-tuning): 0/5 PutPotOnCooktop, 0/5 PutAppleInBowl, 0 so far on the conveyor.
-- The arms reach toward the objects, but the grippers never close.
+Results so far (conveyor task, 10 episodes each):
+- Pretrained Long-WAM-YAM: 0/10. Both arms move, grippers never close (also 0/5 on PutPotOnCooktop and PutAppleInBowl).
+- Fine-tuned step 250: 0/10. The idle left arm now stays home and the right arm takes the expert's hover pose.
+- Fine-tuned final (step 1,216): evaluation running (0/3 so far). The arm follows the cube but does not dive and grasp.
+- Checkpoints: https://huggingface.co/kabilanKB/longwam-yam-conveyor
 
 ## 6. Imagination video (LongLive2.0-Robot)
 
